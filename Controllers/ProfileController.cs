@@ -1,35 +1,66 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Paper_Route.User;
+using Paper_Route.Models;
+using System.Threading.Tasks;
 
-public class ProfileController : Controller
+namespace Paper_Route.Controllers
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-
-    public ProfileController(UserManager<ApplicationUser> userManager)
+    [Authorize]
+    public class ProfileController : Controller
     {
-        _userManager = userManager;
-    }
+        private readonly UserManager<ApplicationUser> _userManager;
 
-    public async Task<IActionResult> Index()
-    {
-        var user = await _userManager.GetUserAsync(User);
-        if (user == null) return Challenge();
+        public ProfileController(UserManager<ApplicationUser> userManager)
+        {
+            _userManager = userManager;
+        }
 
-        // Load profile info
-        var profile = new UserProfile(); 
-        return View(profile);
-    }
+        [HttpGet]
+        public async Task<IActionResult> Index()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return NotFound();
 
-    [HttpPost]
-    public async Task<IActionResult> Update(UserProfile model)
-    {
-        if (!ModelState.IsValid) return View("Index", model);
+            var roles = await _userManager.GetRolesAsync(user);
 
-        var user = await _userManager.GetUserAsync(User);
-        if (user == null) return Challenge();
+            var model = new ProfileViewModel
+            {
+                Email = user.Email,
+                UserName = user.UserName,
+                Roles = roles,
+                PhoneNumber = user.PhoneNumber
+            };
 
+            return View(model);
+        }
 
-        return RedirectToAction("Index");
+        [HttpPost]
+        public async Task<IActionResult> Index(ProfileViewModel model)
+        {
+            if (!ModelState.IsValid) return View(model);
+
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return NotFound();
+
+            // Update editable fields
+            user.UserName = model.UserName;
+            user.Email = model.Email;
+            user.PhoneNumber = model.PhoneNumber;
+
+            var result = await _userManager.UpdateAsync(user);
+
+            if (result.Succeeded)
+            {
+                ViewBag.Message = "Profile updated successfully!";
+                return View(model);
+            }
+
+            foreach (var error in result.Errors)
+                ModelState.AddModelError("", error.Description);
+
+            return View(model);
+        }
     }
 }
