@@ -1,5 +1,70 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model IEnumerable<Paper_Route.Models.UserClaim>
 @{
+    ViewData["Title"] = "Claims";
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    var mode = ViewBag.Mode as string ?? "user";
+    bool isWorker = User.IsInRole("Worker");
 }
+
+<div class="container mt-4">
+    <h2>Claims</h2>
+    <p>Model count: @Model.Count()</p>
+
+    @if (isWorker)
+    {
+        <div class="mb-3">
+            <a asp-action="Index" asp-route-mode="worker" class="btn btn-secondary @(mode=="worker" ? "active" : "")">Worker View</a>
+            <a asp-action="Index" asp-route-mode="user" class="btn btn-secondary @(mode=="user" ? "active" : "")">User View</a>
+        </div>
+    }
+
+    <div class="mb-3">
+        <a asp-action="Create" class="btn btn-primary">+ Add Claim</a>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">No claims yet, use the above button to add one.</div>
+    }
+    else
+    {
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Message</th>
+                    <th>Date</th>
+                    <th>Attachments</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var claim in Model)
+                {
+                    <tr>
+                        <td>@claim.Title</td>
+                        <td>@claim.Message</td>
+                        <td>@claim.DateCreated.ToLocalTime().ToString("g")</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(claim.Attachments))
+                            {
+                                var files = claim.Attachments.Split(';');
+                                foreach (var file in files)
+                                {
+                                    <a href="@file" target="_blank">View</a>
+
+                                    <br />
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
