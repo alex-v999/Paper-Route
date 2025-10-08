@@ -1,13 +1,18 @@
-﻿namespace Paper_Route.User
+﻿using Paper_Route.Models;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Paper_Route.User
 {
     public class WorkerProfile
     {
-        public int Id { get; set; } // <- primary key
-        public string UserId { get; set; }
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string PhoneNumber { get; set; }
-        public string Specialization { get; set; }
+        public int Id { get; set; }
+
+        public string? UserId { get; set; }
+        public ApplicationUser? User { get; set; }
+
+        public string Specialization { get; set; } = string.Empty;
+        public int MaxAppointmentsPerDay { get; set; } = 5;
+
     }
 
 }

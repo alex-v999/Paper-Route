@@ -12,8 +12,8 @@ using Paper_Route.User;
 namespace Paper_Route.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251005231954_claims")]
-    partial class claims
+    [Migration("20251007211952_21")]
+    partial class _21
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -158,6 +158,72 @@ namespace Paper_Route.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Paper_Route.Models.Consultations.Consultation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApplicationUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ConsultationTypeID")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("ScheduledDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("WorkerProfileID")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationUserId");
+
+                    b.HasIndex("ConsultationTypeID");
+
+                    b.HasIndex("WorkerProfileID");
+
+                    b.ToTable("Consultations");
+                });
+
+            modelBuilder.Entity("Paper_Route.Models.Consultations.ConsultationType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DefaultDurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ConsultationTypes");
+                });
+
             modelBuilder.Entity("Paper_Route.Models.UserClaim", b =>
                 {
                     b.Property<int>("Id")
@@ -287,35 +353,6 @@ namespace Paper_Route.Migrations
                     b.ToTable("DocumentCases");
                 });
 
-            modelBuilder.Entity("Paper_Route.User.UserProfile", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("UserProfiles");
-                });
-
             modelBuilder.Entity("Paper_Route.User.WorkerProfile", b =>
                 {
                     b.Property<int>("Id")
@@ -324,27 +361,19 @@ namespace Paper_Route.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("MaxAppointmentsPerDay")
+                        .HasColumnType("int");
 
                     b.Property<string>("Specialization")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("WorkerProfiles");
                 });
@@ -398,6 +427,38 @@ namespace Paper_Route.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Paper_Route.Models.Consultations.Consultation", b =>
+                {
+                    b.HasOne("Paper_Route.User.ApplicationUser", "ApplicationUser")
+                        .WithMany()
+                        .HasForeignKey("ApplicationUserId");
+
+                    b.HasOne("Paper_Route.Models.Consultations.ConsultationType", "Type")
+                        .WithMany()
+                        .HasForeignKey("ConsultationTypeID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Paper_Route.User.WorkerProfile", "WorkerProfile")
+                        .WithMany()
+                        .HasForeignKey("WorkerProfileID");
+
+                    b.Navigation("ApplicationUser");
+
+                    b.Navigation("Type");
+
+                    b.Navigation("WorkerProfile");
+                });
+
+            modelBuilder.Entity("Paper_Route.User.WorkerProfile", b =>
+                {
+                    b.HasOne("Paper_Route.User.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("User");
                 });
 #pragma warning restore 612, 618
         }

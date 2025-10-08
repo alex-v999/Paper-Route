@@ -1,0 +1,300 @@
+﻿@model List<Paper_Route.Models.Consultations.Consultation>
+@{
+    ViewData["Title"] = "Consultations";
+    var types = ViewBag.ConsultationTypes as List<Paper_Route.Models.Consultations.ConsultationType> ?? new List<Paper_Route.Models.Consultations.ConsultationType>();
+}
+
+<h2 class="mb-3">Your Consultations</h2>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+<button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#consultationModal">New Consultation</button>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>When</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var c in Model)
+        {
+            <tr>
+                <td>@(c.Type?.Name ?? "—")</td>
+                <td>@c.ScheduledDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                <td>@c.Description</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- Modal: Create Consultation with slot picker -->
+<div class="modal fade" id="consultationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <!-- wider to fit slots -->
+        <div class="modal-content">
+            <form asp-action="Create" method="post" id="consultationCreateForm">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">New Consultation</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Type</label>
+                            <select name="ConsultationTypeID" class="form-select" required>
+                                <option value="">-- Select Type --</option>
+                                @foreach (var t in types)
+                                {
+                                    <option value="@t.Id">@t.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div>
+                                <small class="text-muted">Select a day and then a time slot</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Date strip (next 14 days) -->
+                    <div class="mb-3">
+                        <div id="dateStrip" class="d-flex gap-2 overflow-auto">
+                            <!-- JS injects date buttons here -->
+                        </div>
+                    </div>
+
+                    <!-- Slot list -->
+                    <div class="mb-3">
+                        <h6 id="slotsTitle" class="mb-2">Available slots</h6>
+                        <div id="slotsContainer" class="d-flex flex-wrap gap-2">
+                            <!-- JS injects slot buttons here -->
+                        </div>
+                        <div id="slotsEmpty" class="text-muted mt-2" style="display:none;">No available slots for this day.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="Description" class="form-control" maxlength="500"></textarea>
+                    </div>
+
+                    <!-- Hidden fields populated when user picks a slot -->
+                    <input type="hidden" name="ScheduledDate" id="ScheduledDateInput" />
+                    <input type="hidden" name="ScheduledTime" id="ScheduledTimeInput" />
+                    <input type="hidden" id="SelectedSlotId" name="SelectedSlotId" />
+
+                </div>
+
+                <div class="modal-footer">
+                    <div class="me-auto text-muted" id="selectionHint">No slot selected</div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="submitButton" class="btn btn-success" disabled>Book selected slot</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (function () {
+            const modalEl = document.getElementById('consultationModal');
+            const dateStrip = document.getElementById('dateStrip');
+            const slotsContainer = document.getElementById('slotsContainer');
+            const slotsEmpty = document.getElementById('slotsEmpty');
+            const slotsTitle = document.getElementById('slotsTitle');
+            const scheduledDateInput = document.getElementById('ScheduledDateInput');
+            const scheduledTimeInput = document.getElementById('ScheduledTimeInput');
+            const selectedSlotIdInput = document.getElementById('SelectedSlotId');
+            const submitButton = document.getElementById('submitButton');
+            const selectionHint = document.getElementById('selectionHint');
+
+            // Config
+            const DAYS_AHEAD = 14;
+            const DATE_FORMAT_OPTIONS = { weekday: 'short', day: 'numeric', month: 'short' };
+
+            // Helpers
+            function toYMD(date) {
+                const y = date.getFullYear();
+                const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                const d = date.getDate().toString().padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+            function isoLocalTimeParts(iso) {
+                const d = new Date(iso);
+                const yyyy = d.getFullYear().toString().padStart(4,'0');
+                const mm = (d.getMonth()+1).toString().padStart(2,'0');
+                const dd = d.getDate().toString().padStart(2,'0');
+                const hh = d.getHours().toString().padStart(2,'0');
+                const min = d.getMinutes().toString().padStart(2,'0');
+                return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
+            }
+
+            // Build date strip
+            let dateButtons = [];
+            function buildDateStrip() {
+                dateStrip.innerHTML = '';
+                const today = new Date();
+                for (let i = 0; i < DAYS_AHEAD; i++) {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() + i);
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-outline-secondary text-nowrap';
+                    btn.dataset.date = toYMD(d);
+
+                    // Style weekends differently and disable Sat/Sun
+                    const dow = d.getDay(); // 0 Sun .. 6 Sat
+                    if (dow === 0 || dow === 6) {
+                        btn.classList.add('disabled', 'text-muted');
+                        btn.title = 'No working hours on weekends';
+                    }
+
+                    const label = `${d.toLocaleDateString(undefined, DATE_FORMAT_OPTIONS)}`;
+                    btn.innerHTML = `<div class="small">${label}</div><div class="fw-bold">${d.getDate()}</div>`;
+                    btn.onclick = () => onDateSelected(d, btn);
+                    dateStrip.appendChild(btn);
+                    dateButtons.push(btn);
+
+                    // Auto-select first available weekday
+                    if (i === 0 && dow !== 0 && dow !== 6) {
+                        // will call onDateSelected after rendering all buttons
+                    }
+                }
+
+                // auto-select first working-day (today if weekday, otherwise next weekday)
+                let first = dateButtons.find(b => !b.classList.contains('disabled'));
+                if (first) {
+                    first.classList.remove('btn-outline-secondary');
+                    first.classList.add('btn-primary');
+                    const d = new Date(first.dataset.date);
+                    fetchSlotsForDate(first.dataset.date);
+                }
+            }
+
+            async function onDateSelected(dateObj, btn) {
+                // mark selected
+                dateButtons.forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline-secondary'); });
+                btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-primary');
+
+                const ymd = btn.dataset.date;
+                fetchSlotsForDate(ymd);
+            }
+
+            // Fetch slots from server for date (yyyy-mm-dd)
+            let currentFetchToken = 0;
+            async function fetchSlotsForDate(ymd) {
+                slotsContainer.innerHTML = '';
+                slotsEmpty.style.display = 'none';
+                slotsTitle.textContent = `Available slots — ${new Date(ymd).toLocaleDateString()}`;
+                selectionHint.textContent = 'No slot selected';
+                scheduledDateInput.value = '';
+                scheduledTimeInput.value = '';
+                selectedSlotIdInput.value = '';
+                submitButton.disabled = true;
+
+                const token = ++currentFetchToken;
+                const url = `/Consultations/Available?date=${ymd}`;
+                try {
+                    slotsContainer.innerHTML = `<div class="spinner-border text-secondary" role="status" style="width:1.2rem;height:1.2rem;"><span class="visually-hidden">Loading...</span></div>`;
+                    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    if (token !== currentFetchToken) return; // stale
+                    if (!res.ok) throw new Error('Failed to load slots');
+                    const slots = await res.json();
+
+                    slotsContainer.innerHTML = '';
+                    const available = slots.filter(s => s.state === 'Available');
+                    if (!slots || slots.length === 0 || available.length === 0) {
+                        slotsEmpty.style.display = 'block';
+                        slotsContainer.innerHTML = '';
+                        return;
+                    }
+
+                    // Render slots by time order
+                    slots.sort((a,b) => new Date(a.startUtc) - new Date(b.startUtc));
+                    for (const s of slots) {
+                        const el = document.createElement('button');
+                        el.type = 'button';
+                        el.className = 'btn btn-outline-success btn-sm';
+                        el.style.minWidth = '90px';
+                        el.dataset.slotId = s.id;
+                        el.dataset.startUtc = s.startUtc;
+                        el.dataset.startLocal = s.startLocal; // server-provided localized string or client-generated fallback
+
+                        el.textContent = s.startLocal ?? new Date(s.startUtc).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+                        if (s.state === 'Booked') {
+                            el.className = 'btn btn-outline-secondary btn-sm disabled';
+                            el.title = 'Already booked';
+                        } else if (s.state === 'Blocked') {
+                            el.className = 'btn btn-outline-danger btn-sm disabled';
+                            el.title = s.note || 'Blocked';
+                        } else {
+                            el.onclick = () => onSlotSelected(s, el);
+                        }
+
+                        slotsContainer.appendChild(el);
+                    }
+                } catch (err) {
+                    slotsContainer.innerHTML = '';
+                    slotsEmpty.style.display = 'block';
+                    slotsEmpty.textContent = 'Could not load slots. Try again later.';
+                    console.error(err);
+                }
+            }
+
+            function onSlotSelected(slot, buttonEl) {
+                // clear previous selection styles
+                const buttons = slotsContainer.querySelectorAll('button');
+                buttons.forEach(b => b.classList.remove('btn-success', 'active'));
+                // mark current
+                buttonEl.classList.add('btn-success', 'active');
+
+                // set hidden inputs (ScheduledDate and ScheduledTime expected by your Create action viewmodel)
+                const parts = isoLocalTimeParts(slot.startLocal || slot.startUtc);
+                scheduledDateInput.value = parts.date;
+                scheduledTimeInput.value = parts.time;
+                selectedSlotIdInput.value = slot.id;
+                submitButton.disabled = false;
+                selectionHint.textContent = `Selected ${slot.startLocal || parts.time}`;
+            }
+
+            // Initialize when modal opens
+            modalEl.addEventListener('shown.bs.modal', function () {
+                // build strip once
+                if (!dateStrip.hasChildNodes()) buildDateStrip();
+            });
+
+            // If modal closed, clear selections
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                slotsContainer.innerHTML = '';
+                dateStrip.innerHTML = '';
+                scheduledDateInput.value = '';
+                scheduledTimeInput.value = '';
+                selectedSlotIdInput.value = '';
+                submitButton.disabled = true;
+            });
+
+            // Optional: client-side guard before submit to ensure values are present
+            document.getElementById('consultationCreateForm').addEventListener('submit', function (e) {
+                if (!scheduledDateInput.value || !scheduledTimeInput.value) {
+                    e.preventDefault();
+                    alert('Please select a slot before booking.');
+                }
+            });
+
+        })();
+    </script>
+}

@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Paper_Route.Models;
+using Paper_Route.Models.Consultations;
 
 namespace Paper_Route.User
 {
@@ -11,8 +13,9 @@ namespace Paper_Route.User
         }
 
         public DbSet<DocumentCase> DocumentCases { get; set; }
-        public DbSet<UserProfile> UserProfiles { get; set; }
         public DbSet<WorkerProfile> WorkerProfiles { get; set; }
-        public DbSet<Paper_Route.Models.UserClaim> UserClaims { get; set; }
+        public DbSet<UserClaim> UserClaims { get; set; }
+        public DbSet<Consultation> Consultations { get; set; }
+        public DbSet<ConsultationType> ConsultationTypes { get; set; }
     }
 }

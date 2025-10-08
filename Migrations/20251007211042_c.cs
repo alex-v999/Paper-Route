@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Paper_Route.Migrations
 {
     /// <inheritdoc />
-    public partial class claims : Migration
+    public partial class c : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -51,6 +51,20 @@ namespace Paper_Route.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ConsultationTypes",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    DefaultDurationMinutes = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ConsultationTypes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "DocumentCases",
                 columns: table => new
                 {
@@ -74,48 +88,15 @@ namespace Paper_Route.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Title = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Message = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     DateCreated = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    Attachments = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    Attachments = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UserId = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_UserClaims", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "UserProfiles",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserProfiles", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "WorkerProfiles",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Specialization = table.Column<string>(type: "nvarchar(max)", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_WorkerProfiles", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -224,6 +205,61 @@ namespace Paper_Route.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "WorkerProfiles",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
+                    Specialization = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    MaxAppointmentsPerDay = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkerProfiles", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_WorkerProfiles_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Consultations",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ConsultationTypeID = table.Column<int>(type: "int", nullable: false),
+                    ScheduledDateTime = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    UserId = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ApplicationUserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
+                    WorkerProfileID = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Consultations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Consultations_AspNetUsers_ApplicationUserId",
+                        column: x => x.ApplicationUserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Consultations_ConsultationTypes_ConsultationTypeID",
+                        column: x => x.ConsultationTypeID,
+                        principalTable: "ConsultationTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Consultations_WorkerProfiles_WorkerProfileID",
+                        column: x => x.WorkerProfileID,
+                        principalTable: "WorkerProfiles",
+                        principalColumn: "Id");
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_AspNetRoleClaims_RoleId",
                 table: "AspNetRoleClaims",
@@ -262,6 +298,26 @@ namespace Paper_Route.Migrations
                 column: "NormalizedUserName",
                 unique: true,
                 filter: "[NormalizedUserName] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Consultations_ApplicationUserId",
+                table: "Consultations",
+                column: "ApplicationUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Consultations_ConsultationTypeID",
+                table: "Consultations",
+                column: "ConsultationTypeID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Consultations_WorkerProfileID",
+                table: "Consultations",
+                column: "WorkerProfileID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkerProfiles_UserId",
+                table: "WorkerProfiles",
+                column: "UserId");
         }
 
         /// <inheritdoc />
@@ -283,19 +339,22 @@ namespace Paper_Route.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "Consultations");
+
+            migrationBuilder.DropTable(
                 name: "DocumentCases");
 
             migrationBuilder.DropTable(
                 name: "UserClaims");
 
             migrationBuilder.DropTable(
-                name: "UserProfiles");
+                name: "AspNetRoles");
+
+            migrationBuilder.DropTable(
+                name: "ConsultationTypes");
 
             migrationBuilder.DropTable(
                 name: "WorkerProfiles");
-
-            migrationBuilder.DropTable(
-                name: "AspNetRoles");
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");
