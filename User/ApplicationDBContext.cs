@@ -17,5 +17,7 @@ namespace Paper_Route.User
         public DbSet<UserClaim> UserClaims { get; set; }
         public DbSet<Consultation> Consultations { get; set; }
         public DbSet<ConsultationType> ConsultationTypes { get; set; }
+        public DbSet<AvailableSlot> AvailableSlots { get; set; } 
+        public DbSet<SlotBlock> SlotBlocks { get; set; }
     }
 }

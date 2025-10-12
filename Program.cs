@@ -74,9 +74,9 @@ using (var scope = app.Services.CreateScope())
         // Seed consultation types
         var consultationTypes = new[]
         {
-            new ConsultationType { Name = "General Consultation", Description = "A general consultation session." },
-            new ConsultationType { Name = "Specialized Consultation", Description = "A specialized consultation session." },
-            new ConsultationType { Name = "Document Inspections", Description = "A not so specialized consultation." }
+            new ConsultationType { Name = "General Consultation", Description = "A general consultation session.", DefaultDurationMinutes = 15},
+            new ConsultationType { Name = "Specialized Consultation", Description = "A specialized consultation session.", DefaultDurationMinutes = 45 },
+            new ConsultationType { Name = "Document Inspections", Description = "A not so specialized consultation." , DefaultDurationMinutes = 25}
         };
 
         foreach (var ct in consultationTypes)
@@ -87,12 +87,12 @@ using (var scope = app.Services.CreateScope())
             }
         }
 
-        // ---- Seed AvailableSlots for a rolling window ----
-        // Adjust windowDays and timezone as needed for dev
-        int windowDays = 30;
-        TimeZoneInfo tz = TimeZoneInfo.Local; // or TimeZoneInfo.FindSystemTimeZoneById("Europe/Bucharest")
-        TimeSpan workStart = TimeSpan.FromHours(8);   // 08:00 local
-        TimeSpan workEnd = TimeSpan.FromHours(15);    // 15:00 local (end exclusive)
+        // Choose explicit timezone
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Bucharest");
+
+        int windowDays = 45;
+        TimeSpan workStart = TimeSpan.FromHours(8);
+        TimeSpan workEnd = TimeSpan.FromHours(15);
         int slotMinutes = 15;
 
         DateTime todayLocal = TimeZoneInfo.ConvertTime(DateTime.UtcNow, TimeZoneInfo.Utc, tz).Date;
@@ -100,25 +100,28 @@ using (var scope = app.Services.CreateScope())
 
         for (var day = todayLocal; day < endLocal; day = day.AddDays(1))
         {
-            // only Monday..Friday
             if (day.DayOfWeek == DayOfWeek.Saturday || day.DayOfWeek == DayOfWeek.Sunday) continue;
 
             for (var t = workStart; t < workEnd; t = t.Add(TimeSpan.FromMinutes(slotMinutes)))
             {
-                var localStart = day + t; // local DateTime (unspecified kind)
-                // Convert local to UTC safely
+                // create local DateTime as Unspecified so conversion uses tz correctly
+                var localStart = DateTime.SpecifyKind(day + t, DateTimeKind.Unspecified);
+
+                // convert from the chosen timezone to UTC
                 var startUtc = TimeZoneInfo.ConvertTimeToUtc(localStart, tz);
 
-                // skip past slots
-                if (startUtc <= DateTime.UtcNow) continue;
+                // debug: log first few values if needed
+                // Console.WriteLine($"localStart={localStart:yyyy-MM-dd HH:mm} startUtc={startUtc:O} nowUtc={DateTime.UtcNow:O}");
 
-                // uniqueness: avoid duplicates. Use StartUtc and null WorkerProfileId for global slots
-                bool exists = await db.Set<AvailableSlot>()
+                // skip strictly past slots (allow small clock skew)
+                if (startUtc <= DateTime.UtcNow.AddMinutes(-1)) continue;
+
+                bool exists = await db.AvailableSlots
                     .AnyAsync(s => s.StartUtc == startUtc && s.WorkerProfileId == null);
 
                 if (!exists)
                 {
-                    db.Set<AvailableSlot>().Add(new AvailableSlot
+                    db.AvailableSlots.Add(new AvailableSlot
                     {
                         StartUtc = startUtc,
                         DurationMinutes = slotMinutes,
@@ -130,7 +133,9 @@ using (var scope = app.Services.CreateScope())
             }
         }
 
+        // persist inserted slots
         await db.SaveChangesAsync();
+
     }
     catch (Exception ex)
     {

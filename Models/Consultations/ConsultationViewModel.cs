@@ -19,5 +19,6 @@ namespace Paper_Route.Models.Consultations
 
         [StringLength(500)]
         public string? Description { get; set; }
+        public int? SelectedSlotId { get; set; }
     }
 }

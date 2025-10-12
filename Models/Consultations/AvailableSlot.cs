@@ -1,4 +1,7 @@
-﻿public class AvailableSlot
+﻿using Paper_Route.Models.Consultations;
+using Paper_Route.User;
+
+public class AvailableSlot
 {
     public int Id { get; set; }
 
@@ -9,8 +12,10 @@
     public SlotState State { get; set; }
 
     public int? WorkerProfileId { get; set; }
+    public WorkerProfile? WorkerProfile { get; set; }
 
     public int? ConsultationId { get; set; }
+    public Consultation? Consultation { get; set; }
 
     public string? Note { get; set; }
 }

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Paper_Route.Migrations
 {
     /// <inheritdoc />
-    public partial class c : Migration
+    public partial class b : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -57,7 +57,8 @@ namespace Paper_Route.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    DefaultDurationMinutes = table.Column<int>(type: "int", nullable: false)
+                    DefaultDurationMinutes = table.Column<int>(type: "int", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -80,6 +81,22 @@ namespace Paper_Route.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DocumentCases", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SlotBlocks",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    StartUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EndUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    WorkerProfileId = table.Column<int>(type: "int", nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SlotBlocks", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -260,6 +277,34 @@ namespace Paper_Route.Migrations
                         principalColumn: "Id");
                 });
 
+            migrationBuilder.CreateTable(
+                name: "AvailableSlots",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    StartUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DurationMinutes = table.Column<int>(type: "int", nullable: false),
+                    State = table.Column<int>(type: "int", nullable: false),
+                    WorkerProfileId = table.Column<int>(type: "int", nullable: true),
+                    ConsultationId = table.Column<int>(type: "int", nullable: true),
+                    Note = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AvailableSlots", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AvailableSlots_Consultations_ConsultationId",
+                        column: x => x.ConsultationId,
+                        principalTable: "Consultations",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_AvailableSlots_WorkerProfiles_WorkerProfileId",
+                        column: x => x.WorkerProfileId,
+                        principalTable: "WorkerProfiles",
+                        principalColumn: "Id");
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_AspNetRoleClaims_RoleId",
                 table: "AspNetRoleClaims",
@@ -298,6 +343,16 @@ namespace Paper_Route.Migrations
                 column: "NormalizedUserName",
                 unique: true,
                 filter: "[NormalizedUserName] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AvailableSlots_ConsultationId",
+                table: "AvailableSlots",
+                column: "ConsultationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AvailableSlots_WorkerProfileId",
+                table: "AvailableSlots",
+                column: "WorkerProfileId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Consultations_ApplicationUserId",
@@ -339,16 +394,22 @@ namespace Paper_Route.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
-                name: "Consultations");
+                name: "AvailableSlots");
 
             migrationBuilder.DropTable(
                 name: "DocumentCases");
+
+            migrationBuilder.DropTable(
+                name: "SlotBlocks");
 
             migrationBuilder.DropTable(
                 name: "UserClaims");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
+
+            migrationBuilder.DropTable(
+                name: "Consultations");
 
             migrationBuilder.DropTable(
                 name: "ConsultationTypes");

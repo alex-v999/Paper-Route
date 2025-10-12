@@ -12,8 +12,8 @@ using Paper_Route.User;
 namespace Paper_Route.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251007211952_21")]
-    partial class _21
+    [Migration("20251008135509_b")]
+    partial class b
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,41 @@ namespace Paper_Route.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("AvailableSlot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ConsultationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("State")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("WorkerProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConsultationId");
+
+                    b.HasIndex("WorkerProfileId");
+
+                    b.ToTable("AvailableSlots");
+                });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
@@ -376,6 +411,46 @@ namespace Paper_Route.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("WorkerProfiles");
+                });
+
+            modelBuilder.Entity("SlotBlock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("WorkerProfileId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SlotBlocks");
+                });
+
+            modelBuilder.Entity("AvailableSlot", b =>
+                {
+                    b.HasOne("Paper_Route.Models.Consultations.Consultation", "Consultation")
+                        .WithMany()
+                        .HasForeignKey("ConsultationId");
+
+                    b.HasOne("Paper_Route.User.WorkerProfile", "WorkerProfile")
+                        .WithMany()
+                        .HasForeignKey("WorkerProfileId");
+
+                    b.Navigation("Consultation");
+
+                    b.Navigation("WorkerProfile");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

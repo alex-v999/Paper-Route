@@ -26,7 +26,7 @@
         {
             <tr>
                 <td>@(c.Type?.Name ?? "—")</td>
-                <td>@c.ScheduledDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                <td>@c.ScheduledDateTime.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
                 <td>@c.Description</td>
             </tr>
         }
@@ -36,9 +36,8 @@
 <!-- Modal: Create Consultation with slot picker -->
 <div class="modal fade" id="consultationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <!-- wider to fit slots -->
         <div class="modal-content">
-            <form asp-action="Create" method="post" id="consultationCreateForm">
+            <form asp-action="Create" method="post" id="consultationCreateForm" novalidate>
                 @Html.AntiForgeryToken()
                 <div class="modal-header">
                     <h5 class="modal-title">New Consultation</h5>
@@ -67,9 +66,9 @@
                         </div>
                     </div>
 
-                    <!-- Date strip (next 14 days) -->
+                    <!-- Date strip (next DAYS_AHEAD days) -->
                     <div class="mb-3">
-                        <div id="dateStrip" class="d-flex gap-2 overflow-auto">
+                        <div id="dateStrip" class="d-flex gap-2 overflow-auto" aria-label="Available days">
                             <!-- JS injects date buttons here -->
                         </div>
                     </div>
@@ -77,10 +76,15 @@
                     <!-- Slot list -->
                     <div class="mb-3">
                         <h6 id="slotsTitle" class="mb-2">Available slots</h6>
-                        <div id="slotsContainer" class="d-flex flex-wrap gap-2">
+
+                        <div id="slotsContainer" class="d-flex flex-wrap gap-2" aria-live="polite" aria-atomic="true">
                             <!-- JS injects slot buttons here -->
                         </div>
-                        <div id="slotsEmpty" class="text-muted mt-2" style="display:none;">No available slots for this day.</div>
+
+                        <div id="slotsEmpty" class="text-center text-muted mt-3" style="display:none;">
+                            <div id="slotsEmptyMessage" class="mb-2">No available slots for this day.</div>
+                            <button type="button" id="reloadSlotsBtn" class="btn btn-sm btn-outline-primary">Try another day</button>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -88,11 +92,7 @@
                         <textarea name="Description" class="form-control" maxlength="500"></textarea>
                     </div>
 
-                    <!-- Hidden fields populated when user picks a slot -->
-                    <input type="hidden" name="ScheduledDate" id="ScheduledDateInput" />
-                    <input type="hidden" name="ScheduledTime" id="ScheduledTimeInput" />
                     <input type="hidden" id="SelectedSlotId" name="SelectedSlotId" />
-
                 </div>
 
                 <div class="modal-footer">
@@ -109,192 +109,260 @@
     <partial name="_ValidationScriptsPartial" />
 
     <script>
-        (function () {
-            const modalEl = document.getElementById('consultationModal');
-            const dateStrip = document.getElementById('dateStrip');
-            const slotsContainer = document.getElementById('slotsContainer');
-            const slotsEmpty = document.getElementById('slotsEmpty');
-            const slotsTitle = document.getElementById('slotsTitle');
-            const scheduledDateInput = document.getElementById('ScheduledDateInput');
-            const scheduledTimeInput = document.getElementById('ScheduledTimeInput');
-            const selectedSlotIdInput = document.getElementById('SelectedSlotId');
-            const submitButton = document.getElementById('submitButton');
-            const selectionHint = document.getElementById('selectionHint');
+        document.addEventListener('DOMContentLoaded', () => {
+          (function () {
+            try {
+              console.log('slot-picker script initialized');
 
-            // Config
-            const DAYS_AHEAD = 14;
-            const DATE_FORMAT_OPTIONS = { weekday: 'short', day: 'numeric', month: 'short' };
+              // Element references
+              const modalEl = document.getElementById('consultationModal');
+              if (!modalEl) {
+                console.error('consultationModal not found in DOM');
+                return;
+              }
 
-            // Helpers
-            function toYMD(date) {
+              const dateStrip = document.getElementById('dateStrip');
+              const slotsContainer = document.getElementById('slotsContainer');
+              const slotsEmpty = document.getElementById('slotsEmpty');
+              const slotsEmptyMessage = document.getElementById('slotsEmptyMessage') || slotsEmpty;
+              const slotsTitle = document.getElementById('slotsTitle');
+              const selectedSlotIdInput = document.getElementById('SelectedSlotId');
+              const submitButton = document.getElementById('submitButton');
+              const selectionHint = document.getElementById('selectionHint');
+              const reloadSlotsBtn = document.getElementById('reloadSlotsBtn');
+              const form = document.getElementById('consultationCreateForm');
+              const consultationTypeSelect = document.querySelector('select[name="ConsultationTypeID"]');
+
+
+              // Config
+              const DAYS_AHEAD = 14;
+              const DATE_FORMAT_OPTIONS = { weekday: 'short', day: 'numeric', month: 'short' };
+
+              // State
+              let dateButtons = [];
+              let currentFetchToken = 0;
+
+              // Helpers
+              function toYMD(date) {
                 const y = date.getFullYear();
                 const m = (date.getMonth() + 1).toString().padStart(2, '0');
                 const d = date.getDate().toString().padStart(2, '0');
                 return `${y}-${m}-${d}`;
-            }
-            function isoLocalTimeParts(iso) {
-                const d = new Date(iso);
-                const yyyy = d.getFullYear().toString().padStart(4,'0');
-                const mm = (d.getMonth()+1).toString().padStart(2,'0');
-                const dd = d.getDate().toString().padStart(2,'0');
-                const hh = d.getHours().toString().padStart(2,'0');
-                const min = d.getMinutes().toString().padStart(2,'0');
-                return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
-            }
+              }
 
-            // Build date strip
-            let dateButtons = [];
-            function buildDateStrip() {
+              // UI Builders
+              function buildDateStrip() {
+                dateButtons = [];
                 dateStrip.innerHTML = '';
+
                 const today = new Date();
                 for (let i = 0; i < DAYS_AHEAD; i++) {
-                    const d = new Date(today);
-                    d.setDate(today.getDate() + i);
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn btn-outline-secondary text-nowrap';
-                    btn.dataset.date = toYMD(d);
+                  const d = new Date(today);
+                  d.setDate(today.getDate() + i);
 
-                    // Style weekends differently and disable Sat/Sun
-                    const dow = d.getDay(); // 0 Sun .. 6 Sat
-                    if (dow === 0 || dow === 6) {
-                        btn.classList.add('disabled', 'text-muted');
-                        btn.title = 'No working hours on weekends';
-                    }
+                  const btn = document.createElement('button');
+                  btn.type = 'button';
+                  btn.className = 'btn btn-outline-secondary text-nowrap';
+                  btn.dataset.date = toYMD(d);
+                  btn.setAttribute('aria-label', d.toLocaleDateString(undefined, DATE_FORMAT_OPTIONS));
 
-                    const label = `${d.toLocaleDateString(undefined, DATE_FORMAT_OPTIONS)}`;
-                    btn.innerHTML = `<div class="small">${label}</div><div class="fw-bold">${d.getDate()}</div>`;
-                    btn.onclick = () => onDateSelected(d, btn);
-                    dateStrip.appendChild(btn);
-                    dateButtons.push(btn);
+                  const dow = d.getDay(); // 0 Sun .. 6 Sat
+                  if (dow === 0 || dow === 6) {
+                    btn.classList.add('text-muted');
+                    btn.title = 'No working hours on weekends';
+                    btn.dataset.weekend = '1';
+                  }
 
-                    // Auto-select first available weekday
-                    if (i === 0 && dow !== 0 && dow !== 6) {
-                        // will call onDateSelected after rendering all buttons
-                    }
+                  const label = `${d.toLocaleDateString(undefined, DATE_FORMAT_OPTIONS)}`;
+                  btn.innerHTML = `<div class="small">${label}</div><div class="fw-bold">${d.getDate()}</div>`;
+
+                  btn.addEventListener('click', () => {
+                    if (btn.dataset.weekend === '1') return;
+                    onDateSelected(btn.dataset.date, btn);
+                  });
+
+                  dateStrip.appendChild(btn);
+                  dateButtons.push(btn);
                 }
 
-                // auto-select first working-day (today if weekday, otherwise next weekday)
-                let first = dateButtons.find(b => !b.classList.contains('disabled'));
+                // auto-select first working day
+                const first = dateButtons.find(b => b.dataset.weekend !== '1');
                 if (first) {
-                    first.classList.remove('btn-outline-secondary');
-                    first.classList.add('btn-primary');
-                    const d = new Date(first.dataset.date);
-                    fetchSlotsForDate(first.dataset.date);
+                  selectDateButton(first);
+                  fetchSlotsForDate(first.dataset.date).catch(console.error);
                 }
-            }
+              }
 
-            async function onDateSelected(dateObj, btn) {
-                // mark selected
-                dateButtons.forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline-secondary'); });
-                btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-primary');
+              function selectDateButton(btn) {
+                dateButtons.forEach(b => {
+                  b.classList.remove('btn-primary');
+                  b.classList.add('btn-outline-secondary');
+                });
+                btn.classList.remove('btn-outline-secondary');
+                btn.classList.add('btn-primary');
+              }
 
-                const ymd = btn.dataset.date;
-                fetchSlotsForDate(ymd);
-            }
+              async function onDateSelected(ymd, btn) {
+                selectDateButton(btn);
+                await fetchSlotsForDate(ymd);
+              }
 
-            // Fetch slots from server for date (yyyy-mm-dd)
-            let currentFetchToken = 0;
-            async function fetchSlotsForDate(ymd) {
-                slotsContainer.innerHTML = '';
-                slotsEmpty.style.display = 'none';
-                slotsTitle.textContent = `Available slots — ${new Date(ymd).toLocaleDateString()}`;
-                selectionHint.textContent = 'No slot selected';
-                scheduledDateInput.value = '';
-                scheduledTimeInput.value = '';
-                selectedSlotIdInput.value = '';
-                submitButton.disabled = true;
-
-                const token = ++currentFetchToken;
-                const url = `/Consultations/Available?date=${ymd}`;
+              // Slot Fetch
+              async function fetchSlotsForDate(ymd) {
                 try {
-                    slotsContainer.innerHTML = `<div class="spinner-border text-secondary" role="status" style="width:1.2rem;height:1.2rem;"><span class="visually-hidden">Loading...</span></div>`;
-                    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-                    if (token !== currentFetchToken) return; // stale
-                    if (!res.ok) throw new Error('Failed to load slots');
-                    const slots = await res.json();
+                  console.log('fetchSlotsForDate', ymd);
+                  slotsContainer.innerHTML = '';
+                  if (slotsEmpty) slotsEmpty.style.display = 'none';
+                  slotsTitle.textContent = `Available slots — ${new Date(ymd).toLocaleDateString()}`;
+                  if (selectionHint) selectionHint.textContent = 'No slot selected';
+                  if (selectedSlotIdInput) selectedSlotIdInput.value = '';
+                  if (submitButton) submitButton.disabled = true;
 
-                    slotsContainer.innerHTML = '';
-                    const available = slots.filter(s => s.state === 'Available');
-                    if (!slots || slots.length === 0 || available.length === 0) {
-                        slotsEmpty.style.display = 'block';
-                        slotsContainer.innerHTML = '';
-                        return;
+                  const token = ++currentFetchToken;
+                  const url = `/Consultations/Available?date=${ymd}`;
+                  slotsContainer.innerHTML = `
+                    <div class="spinner-border text-secondary" role="status" style="width:1.2rem;height:1.2rem;">
+                      <span class="visually-hidden">Loading...</span>
+                    </div>`;
+
+                  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                  if (token !== currentFetchToken) return; // stale response
+                  if (!res.ok) {
+                    const txt = await res.text();
+                    throw new Error(`Failed to load slots: ${res.status} ${txt}`);
+                  }
+
+                  const payload = await res.json();
+                  console.log('Available response', { ymd, payload });
+
+                  const slots = Array.isArray(payload) ? payload : (payload.slots || []);
+                  const message = Array.isArray(payload) ? null : payload.message;
+
+                  slotsContainer.innerHTML = '';
+                  const available = slots.filter(s => {
+                    const st = (s.state ?? '').toString().toLowerCase();
+                    return st === 'available' || st === '0';
+                  });
+
+                  if (available.length === 0) {
+                    if (slotsEmpty) {
+                      slotsEmpty.style.display = 'block';
+                      slotsEmptyMessage.textContent = message || 'No available slots at the moment.';
                     }
+                    return;
+                  }
 
-                    // Render slots by time order
-                    slots.sort((a,b) => new Date(a.startUtc) - new Date(b.startUtc));
-                    for (const s of slots) {
+                  slots.sort((a, b) => new Date(a.startUtc) - new Date(b.startUtc));
+                  for (const s of slots) {
+
+                    const state = (s.state ?? '').toString().toLowerCase();
+                    if (state === 'booked' || state === 'blocked'){}
+                   
+                    else{
                         const el = document.createElement('button');
                         el.type = 'button';
-                        el.className = 'btn btn-outline-success btn-sm';
                         el.style.minWidth = '90px';
                         el.dataset.slotId = s.id;
                         el.dataset.startUtc = s.startUtc;
-                        el.dataset.startLocal = s.startLocal; // server-provided localized string or client-generated fallback
+                        el.dataset.startLocal = s.startLocal;
 
-                        el.textContent = s.startLocal ?? new Date(s.startUtc).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                        el.className = 'btn btn-outline-success btn-sm';
+                        el.addEventListener('click', () => onSlotSelected(s, el));
 
-                        if (s.state === 'Booked') {
-                            el.className = 'btn btn-outline-secondary btn-sm disabled';
-                            el.title = 'Already booked';
-                        } else if (s.state === 'Blocked') {
-                            el.className = 'btn btn-outline-danger btn-sm disabled';
-                            el.title = s.note || 'Blocked';
-                        } else {
-                            el.onclick = () => onSlotSelected(s, el);
-                        }
-
+                        el.textContent = s.startLocal ?? new Date(s.startUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        el.setAttribute('aria-label', `${el.textContent}, ${state}`);
                         slotsContainer.appendChild(el);
-                    }
-                } catch (err) {
-                    slotsContainer.innerHTML = '';
-                    slotsEmpty.style.display = 'block';
-                    slotsEmpty.textContent = 'Could not load slots. Try again later.';
-                    console.error(err);
-                }
-            }
+                        }
+                  }
 
-            function onSlotSelected(slot, buttonEl) {
-                // clear previous selection styles
+                } catch (err) {
+                  console.error('fetchSlotsForDate error', err);
+                  slotsContainer.innerHTML = '';
+                  if (slotsEmpty) {
+                    slotsEmpty.style.display = 'block';
+                    slotsEmptyMessage.textContent = 'Could not load slots. Please try again later.';
+                  }
+                }
+              }
+
+              // Slot selection
+              function onSlotSelected(slot, buttonEl) {
                 const buttons = slotsContainer.querySelectorAll('button');
                 buttons.forEach(b => b.classList.remove('btn-success', 'active'));
-                // mark current
                 buttonEl.classList.add('btn-success', 'active');
 
-                // set hidden inputs (ScheduledDate and ScheduledTime expected by your Create action viewmodel)
-                const parts = isoLocalTimeParts(slot.startLocal || slot.startUtc);
-                scheduledDateInput.value = parts.date;
-                scheduledTimeInput.value = parts.time;
-                selectedSlotIdInput.value = slot.id;
-                submitButton.disabled = false;
-                selectionHint.textContent = `Selected ${slot.startLocal || parts.time}`;
-            }
+                if (selectedSlotIdInput) selectedSlotIdInput.value = slot.id;
 
-            // Initialize when modal opens
-            modalEl.addEventListener('shown.bs.modal', function () {
-                // build strip once
-                if (!dateStrip.hasChildNodes()) buildDateStrip();
-            });
+                if(consultationTypeSelect.value)
+                    if (submitButton) submitButton.disabled = false;
 
-            // If modal closed, clear selections
-            modalEl.addEventListener('hidden.bs.modal', function () {
+                if (selectionHint) selectionHint.textContent = `Selected ${slot.startLocal || ''}`;
+              }
+
+              // Type selection behavior
+              if (consultationTypeSelect) {
+                consultationTypeSelect.addEventListener('change', () => {
+                  const hasType = consultationTypeSelect.value !== '';
+                  selectedSlotIdInput.value = '';
+
+                  if (hasType) {
+                    buildDateStrip();
+                  } 
+                });
+              }
+
+              // Modal lifecycle
+              modalEl.addEventListener('shown.bs.modal', () => {
+                try {
+                  console.log('modal shown — rebuilding date strip');
+                  //buildDateStrip();
+                } catch (e) {
+                  console.error('error during shown.bs.modal handler', e);
+                }
+              });
+
+              modalEl.addEventListener('hidden.bs.modal', () => {
                 slotsContainer.innerHTML = '';
                 dateStrip.innerHTML = '';
-                scheduledDateInput.value = '';
-                scheduledTimeInput.value = '';
-                selectedSlotIdInput.value = '';
-                submitButton.disabled = true;
-            });
+                consultationTypeSelect.value = '';
+                if (selectedSlotIdInput) selectedSlotIdInput.value = '';
+                if (submitButton) submitButton.disabled = true;
+                if (slotsEmpty) slotsEmpty.style.display = 'none';
+              });
 
-            // Optional: client-side guard before submit to ensure values are present
-            document.getElementById('consultationCreateForm').addEventListener('submit', function (e) {
-                if (!scheduledDateInput.value || !scheduledTimeInput.value) {
+
+              // Reload button
+              if (reloadSlotsBtn) {
+                reloadSlotsBtn.addEventListener('click', () => {
+                  const active = dateButtons.find(b => b.classList.contains('btn-primary'));
+                  if (active) fetchSlotsForDate(active.dataset.date).catch(console.error);
+                });
+              }
+
+              // Form submit guard (only need slot ID now)
+              if (form) {
+                form.addEventListener('submit', e => {
+                  if (!selectedSlotIdInput.value) {
                     e.preventDefault();
-                    alert('Please select a slot before booking.');
-                }
-            });
+                    if (slotsEmptyMessage) {
+                      slotsEmptyMessage.textContent = 'Please select a slot before booking.';
+                      if (slotsEmpty) slotsEmpty.style.display = 'block';
+                    } else {
+                      alert('Please select a slot before booking.');
+                    }
+                  }
+                });
+              }
 
-        })();
+              // Dev helper
+              window.__fetchSlotsForDate = fetchSlotsForDate;
+
+            } catch (e) {
+              console.error('slot-picker init failed', e);
+            }
+          })();
+        });
     </script>
+
 }
+
