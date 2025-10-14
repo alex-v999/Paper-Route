@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Paper_Route.User;
 
@@ -11,9 +12,11 @@ using Paper_Route.User;
 namespace Paper_Route.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251014112308_DocumentTypes")]
+    partial class DocumentTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -305,7 +308,7 @@ namespace Paper_Route.Migrations
 
                     b.HasIndex("DocumentTypeId");
 
-                    b.ToTable("Documents");
+                    b.ToTable("Document");
                 });
 
             modelBuilder.Entity("Paper_Route.Models.Documents.DocumentCase", b =>
@@ -371,7 +374,7 @@ namespace Paper_Route.Migrations
 
                     b.HasIndex("DocumentId");
 
-                    b.ToTable("DocumentCaseFiles");
+                    b.ToTable("DocumentCaseFile");
                 });
 
             modelBuilder.Entity("Paper_Route.Models.Documents.DocumentRequestType", b =>
@@ -394,7 +397,7 @@ namespace Paper_Route.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DocumentRequestTypes");
+                    b.ToTable("DocumentRequestType");
                 });
 
             modelBuilder.Entity("Paper_Route.Models.Documents.DocumentTypeEntity", b =>
@@ -417,7 +420,7 @@ namespace Paper_Route.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DocumentTypes");
+                    b.ToTable("DocumentTypeEntity");
                 });
 
             modelBuilder.Entity("Paper_Route.Models.UserClaim", b =>
