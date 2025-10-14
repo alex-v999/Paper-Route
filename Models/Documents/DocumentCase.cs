@@ -2,7 +2,7 @@
 
 namespace Paper_Route.Models.Documents
 {
-    public class DocumentCase
+    public class DocumentCase // Basically A Request or case made by user to get something
     {
         public int Id { get; set; }  // <- primary key
         public string? Description { get; set; }

@@ -1,5 +1,210 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+﻿@model Paper_Route.Models.DocumentsVaultViewModel
 @{
+    ViewBag.Title = "Documents Vault";
 }
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<div class="container mt-5">
+    <h1 class="mb-4">Documents Vault</h1>
+
+    <!-- Documents Table -->
+    <div class="card mb-5">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Uploaded Documents</span>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">Upload New</button>
+        </div>
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Document Type</th>
+                        <th>File Name</th>
+                        <th>Uploaded At</th>
+                        <th>Verified</th>
+                        <th>Expiration Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var doc in Model.Documents)
+                    {
+                        <tr>
+                            <td>@doc.DocumentType.Name</td>
+                            <td>
+                                <a href="@Url.Action("Download", "Documents", new { id = doc.Id })">
+                                    @doc.FileName
+                                </a>
+                            </td>
+                            <td>@doc.UploadedAt.ToString("yyyy-MM-dd")</td>
+                            <td>@(doc.IsVerified ? "✅" : "❌")</td>
+                            <td>@(doc.ExpirationDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary">Replace</button>
+                                <button class="btn btn-sm btn-danger">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create New Request -->
+    <div class="card mb-5">
+        <div class="card-header">Create New Request</div>
+        <div class="card-body">
+            <form asp-action="CreateRequest" method="post" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="requestType" class="form-label">Request Type</label>
+                    <select class="form-select" id="requestType" name="RequestTypeId">
+                        @foreach (var type in Model.RequestTypes)
+                        {
+                            <option value="@type.Id">@type.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="notes" class="form-label">Optional Notes</label>
+                    <textarea class="form-control" id="notes" name="Notes"></textarea>
+                </div>
+
+                <!-- Required documents checklist -->
+                <div class="mb-3">
+                    <label class="form-label">Required Documents</label>
+                    <ul class="list-group">
+                        @foreach (var reqDoc in Model.RequiredDocuments)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                @reqDoc.Name
+                                @if (Model.Documents.Any(d => d.DocumentType.Id == reqDoc.Id))
+                                {
+                                    <span class="badge bg-success">Uploaded ✅</span>
+                                }
+                                else
+                                {
+                                    <input type="file" class="form-control form-control-sm" name="AdditionalFiles">
+                                }
+                            </li>
+                        }
+                    </ul>
+                </div>
+
+                <button type="submit" class="btn btn-success mt-3">Submit Request</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Active Requests Table -->
+    <div class="card mb-5">
+        <div class="card-header">Active Requests</div>
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Request Type</th>
+                        <th>Status</th>
+                        <th>Submission Date</th>
+                        <th>Completion %</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var req in Model.ActiveRequests)
+                    {
+                        var totalDocs = req.Files.Count;
+                        //var verifiedDocs = req.DocumentCase.Files.Count(f => f.Verified);
+                        var verifiedDocs = 0;
+                        var completionPercent = totalDocs == 0 ? 0 : (verifiedDocs * 100 / totalDocs);
+
+                        <tr>
+                            <td>@req.RequestType.Name</td>
+                            <td>@req.Status</td>
+                            <td>@req.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" style="width:@completionPercent%" aria-valuenow="@completionPercent" aria-valuemin="0" aria-valuemax="100">@completionPercent%</div>
+                                </div>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#requestDetailsModal-@req.Id">View Details</button>
+                                <a href="@Url.Action("DownloadOutputs", "Requests", new { id = req.Id })" class="btn btn-sm btn-success">Download Outputs</a>
+                            </td>
+                        </tr>
+
+                        <!-- Request Details Modal -->
+                        <div class="modal fade" id="requestDetailsModal-@req.Id" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">@req.RequestType.Name Details</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <h6>Documents</h6>
+                                        <ul class="list-group mb-3">
+                                            @foreach (var doc in req.Files)
+                                            {
+                                                <li class="list-group-item d-flex justify-content-between">
+                                                    @doc.Document.FileName (@doc.Role)
+                                                    <span>@(doc.Document.IsVerified ? "✅" : "❌")</span>
+                                                </li>
+                                            }
+                                        </ul>
+      
+                                        @if (req.Status == Paper_Route.Models.Documents.CaseStatus.Completed)
+                                        {
+                                            <a href="@Url.Action("DownloadOutputs", "Requests", new { id = req.Id })" class="btn btn-success mt-3">Download Outputs</a>
+                                        }
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Document Modal -->
+<div class="modal fade" id="uploadDocumentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="UploadDocument" method="post" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="documentType" class="form-label">Document Type</label>
+                        <select class="form-select" id="documentType" name="TypeId">
+                            @foreach (var type in Model.DocumentTypes)
+                            {
+                                <option value="@type.Id">@type.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fileUpload" class="form-label">Select File</label>
+                        <input type="file" class="form-control" id="fileUpload" name="File">
+                    </div>
+                    <div class="mb-3">
+                        <label for="expirationDate" class="form-label">Expiration Date (if applicable)</label>
+                        <input type="date" class="form-control" id="expirationDate" name="ExpirationDate">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
